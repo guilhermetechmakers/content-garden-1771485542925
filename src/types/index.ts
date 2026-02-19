@@ -83,3 +83,51 @@ export interface User {
   display_name?: string
   avatar_url?: string
 }
+
+/** Describe-to-Find Search saved record (DB: describe_to_find_search) */
+export interface DescribeToFindSearch {
+  id: string
+  user_id: string
+  title: string
+  description?: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+/** Result tier: exact match (Seed/Canvas), contextual snippet, or related Drop */
+export type SearchResultTier = 'exact' | 'snippet' | 'drop'
+
+/** Single search result item for display */
+export interface SearchResultItem {
+  id: string
+  tier: SearchResultTier
+  type: 'seed' | 'canvas' | 'drop' | 'snippet'
+  title: string
+  excerpt?: string
+  matchedText?: string
+  timecode?: string
+  provenance?: string
+  confidence?: number
+  created_at?: string
+  source_url?: string
+  canvas_id?: string
+  seed_id?: string
+  drop_id?: string
+}
+
+/** Filters for refinement */
+export interface DescribeToFindSearchFilters {
+  type?: 'seed' | 'canvas' | 'drop' | 'snippet'
+  dateFrom?: string
+  dateTo?: string
+  confidenceMin?: number
+}
+
+/** API response for describe-to-find search */
+export interface DescribeToFindSearchResponse {
+  exact: SearchResultItem[]
+  snippets: SearchResultItem[]
+  drops: SearchResultItem[]
+  recentSearches?: string[]
+}

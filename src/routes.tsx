@@ -10,6 +10,7 @@ import { RunwayPage } from '@/pages/runway'
 import { SnippetsPage } from '@/pages/snippets'
 import { LibraryPage } from '@/pages/library'
 import { SearchPage } from '@/pages/search'
+import DescribeToFindSearchPage from '@/pages/DescribeToFindSearch'
 import { LoginPage } from '@/pages/auth/login'
 import { SignupPage } from '@/pages/auth/signup'
 import { ProfilePage } from '@/pages/profile'
@@ -35,6 +36,7 @@ export const router = createBrowserRouter([
       { path: 'snippets', element: <SnippetsPage /> },
       { path: 'library', element: <LibraryPage /> },
       { path: 'search', element: <SearchPage /> },
+      { path: 'describe-to-find-search', element: <DescribeToFindSearchPage /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: 'admin', element: <AdminPage /> },
     ],

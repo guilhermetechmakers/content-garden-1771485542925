@@ -83,3 +83,18 @@ export const api = {
     }).then(handleResponse<T>)
   },
 }
+
+/** Describe-to-Find Search API (backend: Supabase Edge Function or REST) */
+import type { DescribeToFindSearchFilters, DescribeToFindSearchResponse } from '@/types'
+
+export async function describeToFindSearch(
+  query: string,
+  filters?: DescribeToFindSearchFilters
+): Promise<DescribeToFindSearchResponse> {
+  const params = new URLSearchParams({ q: query })
+  if (filters?.type) params.set('type', filters.type)
+  if (filters?.dateFrom) params.set('dateFrom', filters.dateFrom)
+  if (filters?.dateTo) params.set('dateTo', filters.dateTo)
+  if (filters?.confidenceMin != null) params.set('confidenceMin', String(filters.confidenceMin))
+  return api.get<DescribeToFindSearchResponse>(`/describe-to-find-search?${params.toString()}`)
+}

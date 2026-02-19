@@ -24,7 +24,8 @@ const navItems = [
   { to: '/runway', icon: Plane, label: 'Runway' },
   { to: '/snippets', icon: FileText, label: 'Snippets' },
   { to: '/library', icon: Library, label: 'Library' },
-  { to: '/search', icon: Search, label: 'Describe-to-Find' },
+  { to: '/search', icon: Search, label: 'Search' },
+  { to: '/describe-to-find-search', icon: Search, label: 'Describe-to-Find' },
 ] as const
 
 interface SidebarProps {
