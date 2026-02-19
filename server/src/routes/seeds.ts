@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
-import { seedRepository, type SeedType } from '../models/seed.js'
+import { seedRepository, type SeedType, type TriageStatus } from '../models/seed.js'
 import { storageService } from '../services/storage.js'
 import { checkUploadQuota, recordUpload } from '../middleware/quota.js'
 import { transcriptionWorker } from '../workers/transcriptionWorker.js'
@@ -38,7 +38,21 @@ const createSeedSchema = z.object({
     .default([]),
 })
 
-const updateSeedSchema = createSeedSchema.partial()
+const updateSeedSchema = createSeedSchema.partial().extend({
+  triage_status: z.enum(['kept', 'ignored']).nullable().optional(),
+})
+const mergeSeedsSchema = z.object({
+  seed_ids: z.array(z.string().min(1)).min(2).max(20),
+  title: z.string().min(1).max(500).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  content: z.string().max(50_000).optional(),
+  extracted_bullets: z.array(z.string().max(500)).max(100).optional(),
+})
+
+const bulkTriageSchema = z.object({
+  seed_ids: z.array(z.string().min(1)).min(1).max(50),
+  triage_status: z.enum(['kept', 'ignored']),
+})
 
 const getUploadUrlSchema = z.object({
   filename: z.string().min(1).max(255),
@@ -78,12 +92,23 @@ router.post('/upload-url', (req: Request, res: Response) => {
     })
 })
 
-/** GET /seeds – list seeds for current user */
+/** GET /seeds – list seeds for current user; ?clustered=true returns clusters */
 router.get('/', (req: Request, res: Response) => {
   const userId = getUserId(req)
   const limit = Math.min(Number(req.query.limit) || 100, 100)
-  const seeds = seedRepository.findByUserId(userId, limit)
-  res.json({ seeds })
+  const clustered = req.query.clustered === 'true'
+  const type = typeof req.query.type === 'string' ? req.query.type : undefined
+  const tag = typeof req.query.tag === 'string' ? req.query.tag : undefined
+  const dateFrom = typeof req.query.dateFrom === 'string' ? req.query.dateFrom : undefined
+  const dateTo = typeof req.query.dateTo === 'string' ? req.query.dateTo : undefined
+  const options = { type, tag, dateFrom, dateTo }
+  if (clustered) {
+    const clusters = seedRepository.findClustersByUserId(userId, limit, options)
+    res.json({ clusters })
+  } else {
+    const seeds = seedRepository.findByUserId(userId, limit, options)
+    res.json({ seeds })
+  }
 })
 
 /** GET /seeds/:id – get one seed */
@@ -146,7 +171,52 @@ router.post('/', (req: Request, res: Response) => {
   res.status(201).json(seed)
 })
 
-/** PATCH /seeds/:id – update seed */
+/** POST /seeds/merge – merge multiple seeds into one (must be before POST /) */
+router.post('/merge', (req: Request, res: Response) => {
+  const parsed = mergeSeedsSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ message: 'Validation failed', errors: parsed.error.flatten() })
+    return
+  }
+  const userId = getUserId(req)
+  const first = seedRepository.findById(parsed.data.seed_ids[0]!)
+  const title =
+    parsed.data.title ?? first?.title ?? 'Merged seed'
+  const newSeed = seedRepository.merge(userId, parsed.data.seed_ids, {
+    title,
+    tags: parsed.data.tags,
+    content: parsed.data.content,
+    extracted_bullets: parsed.data.extracted_bullets,
+  })
+  if (!newSeed) {
+    res.status(400).json({ message: 'Could not merge seeds (not found or forbidden)' })
+    return
+  }
+  res.status(201).json(newSeed)
+})
+
+/** POST /seeds/bulk-triage – set triage status for multiple seeds */
+router.post('/bulk-triage', (req: Request, res: Response) => {
+  const userId = getUserId(req)
+  const parsed = bulkTriageSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ message: 'Validation failed', errors: parsed.error.flatten() })
+    return
+  }
+  const updated: NonNullable<ReturnType<typeof seedRepository.update>>[] = []
+  for (const id of parsed.data.seed_ids) {
+    const seed = seedRepository.findById(id)
+    if (seed && seed.user_id === userId) {
+      const u = seedRepository.update(seed.id, {
+        triage_status: parsed.data.triage_status,
+      })
+      if (u) updated.push(u)
+    }
+  }
+  res.json({ updated, count: updated.length })
+})
+
+/** PATCH /seeds/:id – update seed (including triage_status) */
 router.patch('/:id', (req: Request, res: Response) => {
   const id = typeof req.params.id === 'string' ? req.params.id : req.params.id?.[0] ?? ''
   const seed = seedRepository.findById(id)

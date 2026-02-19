@@ -1,4 +1,13 @@
-export type SeedType = 'link' | 'voice' | 'screenshot' | 'thought'
+export type SeedType =
+  | 'link'
+  | 'note'
+  | 'voice'
+  | 'screenshot'
+  | 'image'
+  | 'audio'
+  | 'video'
+
+export type TriageStatus = 'kept' | 'ignored' | null
 
 export interface Seed {
   id: string
@@ -8,9 +17,20 @@ export interface Seed {
   content: string
   tags: string[]
   extracted_bullets: string[]
-  source_url?: string
-  attachments: string[]
+  source_url?: string | null
+  attachments: unknown[]
   created_at: string
+  updated_at?: string
+  triage_status?: TriageStatus
+  merged_into_id?: string | null
+}
+
+export interface SeedCluster {
+  id: string
+  label: string
+  seed_ids: string[]
+  seeds?: Seed[]
+  confidence?: number
 }
 
 export interface Cluster {

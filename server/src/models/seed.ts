@@ -13,6 +13,9 @@ export interface SeedAttachment {
   name?: string
 }
 
+/** Triage state for Garden: null = active, kept = kept, ignored = hidden from main feed */
+export type TriageStatus = 'kept' | 'ignored' | null
+
 export interface Seed {
   id: string
   user_id: string
@@ -27,6 +30,10 @@ export interface Seed {
   updated_at?: string
   /** Processing status for async jobs (transcription, OCR, etc.) */
   processing_status?: 'pending' | 'processing' | 'completed' | 'failed'
+  /** Garden triage: null = active, kept = kept, ignored = hidden */
+  triage_status?: TriageStatus
+  /** If set, this seed was merged into another seed (provenance) */
+  merged_into_id?: string | null
 }
 
 export interface CreateSeedInput {
@@ -49,6 +56,17 @@ export interface UpdateSeedInput {
   source_url?: string | null
   attachments?: SeedAttachment[]
   processing_status?: Seed['processing_status']
+  triage_status?: TriageStatus
+  merged_into_id?: string | null
+}
+
+/** Cluster for soft-clustered feed (heuristic: by first tag or type) */
+export interface SeedCluster {
+  id: string
+  label: string
+  seed_ids: string[]
+  seeds?: Seed[]
+  confidence?: number
 }
 
 /** In-memory store; replace with DB client (e.g. Supabase) in production. */
@@ -74,6 +92,8 @@ export const seedRepository = {
       created_at: now,
       updated_at: now,
       processing_status: input.processing_status ?? 'pending',
+      triage_status: null,
+      merged_into_id: null,
     }
     store.set(seed.id, seed)
     return seed
@@ -83,11 +103,44 @@ export const seedRepository = {
     return store.get(id)
   },
 
-  findByUserId(userId: string, limit = 100): Seed[] {
-    return Array.from(store.values())
+  findByUserId(userId: string, limit = 100, options?: { type?: string; tag?: string; dateFrom?: string; dateTo?: string; triageStatus?: TriageStatus }): Seed[] {
+    let list = Array.from(store.values())
       .filter((s) => s.user_id === userId)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, limit)
+      .filter((s) => !s.merged_into_id)
+    if (options?.triageStatus !== undefined) {
+      list = list.filter((s) => s.triage_status === options.triageStatus)
+    } else {
+      list = list.filter((s) => s.triage_status !== 'ignored')
+    }
+    if (options?.type) list = list.filter((s) => s.type === options.type)
+    if (options?.tag) list = list.filter((s) => s.tags?.includes(options.tag!))
+    if (options?.dateFrom) {
+      const from = new Date(options.dateFrom).getTime()
+      list = list.filter((s) => new Date(s.created_at).getTime() >= from)
+    }
+    if (options?.dateTo) {
+      const to = new Date(options.dateTo).getTime()
+      list = list.filter((s) => new Date(s.created_at).getTime() <= to)
+    }
+    list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    return list.slice(0, limit)
+  },
+
+  /** Simple heuristic clustering: by first tag, else type, else "Other" */
+  findClustersByUserId(userId: string, limit = 100, options?: { type?: string; tag?: string; dateFrom?: string; dateTo?: string }): SeedCluster[] {
+    const seeds = this.findByUserId(userId, limit, { ...options, triageStatus: undefined })
+    const byKey = new Map<string, Seed[]>()
+    for (const s of seeds) {
+      const key = s.tags?.[0] ?? s.type ?? 'other'
+      if (!byKey.has(key)) byKey.set(key, [])
+      byKey.get(key)!.push(s)
+    }
+    return Array.from(byKey.entries()).map(([label, seedsInCluster], i) => ({
+      id: `cluster_${i}_${label}`,
+      label: label === 'other' ? 'Other' : label,
+      seed_ids: seedsInCluster.map((x) => x.id),
+      seeds: seedsInCluster,
+    }))
   },
 
   update(id: string, input: UpdateSeedInput): Seed | undefined {
@@ -108,5 +161,43 @@ export const seedRepository = {
 
   countByUserId(userId: string): number {
     return Array.from(store.values()).filter((s) => s.user_id === userId).length
+  },
+
+  /** Merge multiple seeds into one; originals get merged_into_id set. */
+  merge(
+    userId: string,
+    seedIds: string[],
+    merged: {
+      title: string
+      tags?: string[]
+      content?: string
+      extracted_bullets?: string[]
+    }
+  ): Seed | undefined {
+    if (seedIds.length === 0) return undefined
+    const originals = seedIds.map((id) => store.get(id)).filter(Boolean) as Seed[]
+    if (originals.length === 0) return undefined
+    if (originals.some((s) => s.user_id !== userId)) return undefined
+    const combinedContent =
+      merged.content ??
+      originals.map((s) => `## ${s.title}\n${s.content}`).join('\n\n')
+    const allBullets =
+      merged.extracted_bullets ??
+      originals.flatMap((s) => s.extracted_bullets ?? [])
+    const allTags = Array.from(new Set(originals.flatMap((s) => s.tags ?? [])))
+    const newSeed = this.create({
+      user_id: userId,
+      type: originals[0].type,
+      title: merged.title,
+      content: combinedContent,
+      tags: merged.tags ?? allTags,
+      extracted_bullets: allBullets,
+      source_url: originals[0].source_url,
+      attachments: originals.flatMap((s) => s.attachments ?? []).slice(0, 10),
+    })
+    for (const s of originals) {
+      this.update(s.id, { merged_into_id: newSeed.id })
+    }
+    return newSeed
   },
 }

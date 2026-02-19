@@ -17,6 +17,9 @@ export interface SeedAttachment {
   name?: string
 }
 
+/** Triage state for Garden: null = active, kept = kept, ignored = hidden from main feed */
+export type TriageStatus = 'kept' | 'ignored' | null
+
 export interface Seed {
   id: string
   user_id: string
@@ -30,6 +33,8 @@ export interface Seed {
   created_at: string
   updated_at?: string
   processing_status?: 'pending' | 'processing' | 'completed' | 'failed'
+  triage_status?: TriageStatus
+  merged_into_id?: string | null
 }
 
 export interface CreateSeedPayload {
@@ -49,6 +54,34 @@ export interface UpdateSeedPayload {
   extracted_bullets?: string[]
   source_url?: string | null
   attachments?: SeedAttachment[]
+  triage_status?: TriageStatus
+}
+
+export interface ListSeedsParams {
+  limit?: number
+  clustered?: boolean
+  type?: string
+  tag?: string
+  dateFrom?: string
+  dateTo?: string
+}
+
+export interface MergeSeedsPayload {
+  seed_ids: string[]
+  title?: string
+  tags?: string[]
+  content?: string
+  extracted_bullets?: string[]
+}
+
+export interface BulkTriagePayload {
+  seed_ids: string[]
+  triage_status: 'kept' | 'ignored'
+}
+
+export interface BulkTriageResponse {
+  updated: Seed[]
+  count: number
 }
 
 export interface UploadUrlResponse {
@@ -58,9 +91,30 @@ export interface UploadUrlResponse {
 
 const SEEDS_BASE = '/seeds'
 
-export async function listSeeds(limit?: number): Promise<{ seeds: Seed[] }> {
-  const params = limit != null ? `?limit=${limit}` : ''
-  return api.get<{ seeds: Seed[] }>(`${SEEDS_BASE}${params}`)
+/** Cluster for soft-clustered feed */
+export interface SeedCluster {
+  id: string
+  label: string
+  seed_ids: string[]
+  seeds?: Seed[]
+  confidence?: number
+}
+
+/** List seeds; use clustered: true to get clusters instead of flat list */
+export async function listSeeds(
+  params?: ListSeedsParams
+): Promise<{ seeds: Seed[]; clusters?: SeedCluster[] }> {
+  const search = new URLSearchParams()
+  if (params?.limit != null) search.set('limit', String(params.limit))
+  if (params?.clustered === true) search.set('clustered', 'true')
+  if (params?.type) search.set('type', params.type)
+  if (params?.tag) search.set('tag', params.tag)
+  if (params?.dateFrom) search.set('dateFrom', params.dateFrom)
+  if (params?.dateTo) search.set('dateTo', params.dateTo)
+  const q = search.toString()
+  return api.get<{ seeds: Seed[]; clusters?: SeedCluster[] }>(
+    `${SEEDS_BASE}${q ? `?${q}` : ''}`
+  )
 }
 
 export async function getSeed(id: string): Promise<Seed> {
@@ -77,6 +131,26 @@ export async function updateSeed(id: string, payload: UpdateSeedPayload): Promis
 
 export async function deleteSeed(id: string): Promise<void> {
   return api.delete(`${SEEDS_BASE}/${id}`)
+}
+
+/** Merge multiple seeds into one; originals are marked merged_into_id. */
+export async function mergeSeeds(payload: MergeSeedsPayload): Promise<Seed> {
+  return api.post<Seed>(`${SEEDS_BASE}/merge`, payload)
+}
+
+/** Update triage status (kept / ignored) for a seed. */
+export async function updateSeedTriage(
+  id: string,
+  triage_status: TriageStatus
+): Promise<Seed> {
+  return api.patch<Seed>(`${SEEDS_BASE}/${id}`, { triage_status })
+}
+
+/** Set triage status for multiple seeds at once. */
+export async function bulkTriage(
+  payload: BulkTriagePayload
+): Promise<BulkTriageResponse> {
+  return api.post<BulkTriageResponse>(`${SEEDS_BASE}/bulk-triage`, payload)
 }
 
 export async function getUploadSignedUrl(
