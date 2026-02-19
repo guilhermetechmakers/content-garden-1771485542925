@@ -4,6 +4,7 @@ import seedsRouter from './routes/seeds.js'
 import runwayRouter from './routes/runway.js'
 import libraryRouter from './routes/library.js'
 import dropsRouter from './routes/drops.js'
+import aiToolsRouter from './routes/ai-tools.js'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3001
@@ -15,6 +16,7 @@ app.use('/api/seeds', seedsRouter)
 app.use('/api/runway', runwayRouter)
 app.use('/api/library', libraryRouter)
 app.use('/api/drops', dropsRouter)
+app.use('/api/ai-tools', aiToolsRouter)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })

@@ -243,3 +243,47 @@ export interface DescribeToFindSearchResponse {
   drops: SearchResultItem[]
   recentSearches?: string[]
 }
+
+/** AI Tools — actions for Canvas AI panel */
+export type AIActionType =
+  | 'draft_5_angles'
+  | 'generate_hooks'
+  | 'turn_into_thread'
+  | 'summarize_seeds'
+
+export interface AINodeContext {
+  id: string
+  title?: string
+  content?: string
+  extracted_bullets?: string[]
+  seedId?: string
+}
+
+export interface AIProvenanceItem {
+  type: 'seed' | 'canvas_node'
+  id: string
+  title?: string
+}
+
+export interface AIActionRequest {
+  action: AIActionType
+  canvasId?: string
+  selectedNodeIds?: string[]
+  tone?: string
+  length?: string
+  nodesContext?: AINodeContext[]
+}
+
+export interface AIActionResponse {
+  result: AIActionResult
+  provenance: AIProvenanceItem[]
+  confidence: number
+  creditsUsed?: number
+}
+
+export type AIActionResult =
+  | { angles: string[]; tone: string; length: string }
+  | { hooks: string[]; tone: string; length: string }
+  | { thread: { step: number; text: string }[]; tone: string; length: string }
+  | { summary: string; bullets: string[]; tone: string; length: string }
+  | { error?: string }

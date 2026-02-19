@@ -32,6 +32,8 @@ export interface CanvasEditorProps {
   onOpenVersionHistory?: () => void
   onOpenComments?: () => void
   onPresence?: () => void
+  /** Called when selection changes (for AI panel context) */
+  onSelectionChange?: (selectedNodeIds: string[]) => void
 }
 
 export function CanvasEditor({
@@ -43,6 +45,7 @@ export function CanvasEditor({
   onOpenVersionHistory,
   onOpenComments,
   onPresence,
+  onSelectionChange,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 })
@@ -73,8 +76,9 @@ export function CanvasEditor({
       setIsPanning(true)
       setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y })
       setSelectedId(null)
+      onSelectionChange?.([])
     },
-    [viewport]
+    [viewport, onSelectionChange]
   )
 
   const handlePointerMove = useCallback(
@@ -132,6 +136,7 @@ export function CanvasEditor({
     (e: React.PointerEvent, nodeId: string) => {
       e.stopPropagation()
       setSelectedId(nodeId)
+      onSelectionChange?.([nodeId])
       setDraggingNodeId(nodeId)
       const node = nodes.find((n) => n.id === nodeId)
       if (node) {
@@ -141,7 +146,7 @@ export function CanvasEditor({
         })
       }
     },
-    [nodes, viewport]
+    [nodes, viewport, onSelectionChange]
   )
 
   const handleDrop = useCallback(
@@ -211,8 +216,9 @@ export function CanvasEditor({
       onNodesChange(nodes.filter((n) => n.id !== nodeId))
       onEdgesChange(edges.filter((e) => e.source !== nodeId && e.target !== nodeId))
       setSelectedId(null)
+      onSelectionChange?.([])
     },
-    [nodes, edges, onNodesChange, onEdgesChange]
+    [nodes, edges, onNodesChange, onEdgesChange, onSelectionChange]
   )
 
   const nodePositions = useMemo(() => {

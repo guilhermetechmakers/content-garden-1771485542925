@@ -50,6 +50,7 @@ export function CanvasWorkspacePage() {
   const [snippetModalOpen, setSnippetModalOpen] = useState(false)
   const [assetModalOpen, setAssetModalOpen] = useState(false)
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data: serverCanvas, isLoading } = useQuery({
@@ -196,8 +197,8 @@ export function CanvasWorkspacePage() {
     [localCanvas, updateMutation]
   )
 
-  const handleAIAction = useCallback((_action: string) => {
-    toast.info('AI action will run when AI tools are configured.')
+  const handleSelectionChange = useCallback((ids: string[]) => {
+    setSelectedNodeIds(ids)
   }, [])
 
   if (!isNew && isLoading && !serverCanvas) {
@@ -227,12 +228,13 @@ export function CanvasWorkspacePage() {
         onOpenVersionHistory={() => setVersionHistoryOpen(true)}
         onOpenComments={() => toast.info('Comments will be available in a future update.')}
         onPresence={() => toast.info('Presence and collaboration coming soon.')}
+        onSelectionChange={handleSelectionChange}
       />
       <AIPanel
-        aiAvailable={false}
-        onAction={handleAIAction}
-        isActionLoading={false}
+        aiAvailable={true}
         canvasId={canvas?.id ?? canvasId ?? undefined}
+        selectedNodeIds={selectedNodeIds}
+        nodes={canvas?.nodes ?? []}
         onPublishToDrop={() => {
           const id = canvas?.id ?? canvasId
           if (id) {
