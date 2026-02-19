@@ -661,7 +661,7 @@ When implementing this project:
 5. **Typography**: Define font families, sizes, and weights based on specifications
 6. **Spacing**: Establish consistent spacing scale following the design system
 7. **Components**: Style all Shadcn components to match the design aesthetic
-8. **Animations**: Use Motion library for transitions matching the design personality
+8. **Animations**: Use Tailwind CSS animations with custom keyframes for transitions matching the design personality
 9. **Responsive Design**: Ensure mobile-first responsive implementation
 
 ## Implementation Checklist

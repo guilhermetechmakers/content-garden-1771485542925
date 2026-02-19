@@ -13,6 +13,19 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { seedCaptureAndStorageService, type Seed, type SeedType } from '@/services/seed-capture-and-storageService'
 
 const quickActions: { icon: typeof Link2; label: string; color: string; type: SeedType }[] = [
@@ -50,6 +63,10 @@ export function SeedCaptureAndStorage({
 }: SeedCaptureAndStorageProps) {
   const [captureValue, setCaptureValue] = useState('')
   const [pendingFileType, setPendingFileType] = useState<SeedType | null>(null)
+  const [linkModalOpen, setLinkModalOpen] = useState(false)
+  const [thoughtModalOpen, setThoughtModalOpen] = useState(false)
+  const [linkInput, setLinkInput] = useState('')
+  const [thoughtInput, setThoughtInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
@@ -114,33 +131,53 @@ export function SeedCaptureAndStorage({
 
   const handleQuickAction = (type: SeedType) => {
     if (type === 'note') {
-      const thought = prompt('Quick thought:')
-      if (thought?.trim()) {
-        createMutation.mutate({
-          type: 'note',
-          title: thought.slice(0, 80),
-          content: thought.trim(),
-        })
-      }
+      setThoughtInput('')
+      setThoughtModalOpen(true)
       return
     }
     if (type === 'link') {
-      const url = prompt('Paste link:')
-      if (url?.trim() && isUrl(url.trim())) {
-        createMutation.mutate({
-          type: 'link',
-          title: url.trim(),
-          source_url: url.trim(),
-        })
-      } else if (url?.trim()) {
-        toast.error('Please enter a valid URL')
-      }
+      setLinkInput('')
+      setLinkModalOpen(true)
       return
     }
     if (type === 'voice' || type === 'screenshot') {
       setPendingFileType(type)
       fileInputRef.current?.click()
     }
+  }
+
+  const handleQuickThoughtSubmit = () => {
+    const trimmed = thoughtInput.trim()
+    if (!trimmed) {
+      toast.error('Enter a quick thought')
+      return
+    }
+    createMutation.mutate({
+      type: 'note',
+      title: trimmed.slice(0, 80),
+      content: trimmed,
+    })
+    setThoughtModalOpen(false)
+    setThoughtInput('')
+  }
+
+  const handleLinkSubmit = () => {
+    const trimmed = linkInput.trim()
+    if (!trimmed) {
+      toast.error('Enter a link')
+      return
+    }
+    if (!isUrl(trimmed)) {
+      toast.error('Please enter a valid URL')
+      return
+    }
+    createMutation.mutate({
+      type: 'link',
+      title: trimmed,
+      source_url: trimmed,
+    })
+    setLinkModalOpen(false)
+    setLinkInput('')
   }
 
   const seeds = data?.seeds ?? []
@@ -162,21 +199,25 @@ export function SeedCaptureAndStorage({
               />
               <div className="absolute right-2 top-1/2 flex -translate-y-1/2 gap-1">
                 {quickActions.map(({ icon: Icon, label }) => (
-                  <Button
-                    key={label}
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label={label}
-                    onClick={() =>
-                      handleQuickAction(
-                        quickActions.find((a) => a.label === label)!.type
-                      )
-                    }
-                  >
-                    <Icon className="h-4 w-4" />
-                  </Button>
+                  <Tooltip key={label}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={label}
+                        onClick={() =>
+                          handleQuickAction(
+                            quickActions.find((a) => a.label === label)!.type
+                          )
+                        }
+                      >
+                        <Icon className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{label}</TooltipContent>
+                  </Tooltip>
                 ))}
               </div>
             </div>
@@ -190,6 +231,64 @@ export function SeedCaptureAndStorage({
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={linkModalOpen} onOpenChange={setLinkModalOpen}>
+        <DialogContent showClose className="border-border bg-card">
+          <DialogHeader>
+            <DialogTitle>Paste link</DialogTitle>
+            <DialogDescription>
+              Enter a URL to capture. We'll extract metadata and create a seed.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="https://..."
+            value={linkInput}
+            onChange={(e) => setLinkInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleLinkSubmit()}
+            className="border-border bg-input focus:ring-electric"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLinkSubmit}
+              disabled={createMutation.isPending || !linkInput.trim()}
+            >
+              {createMutation.isPending ? 'Capturing…' : 'Capture'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={thoughtModalOpen} onOpenChange={setThoughtModalOpen}>
+        <DialogContent showClose className="border-border bg-card">
+          <DialogHeader>
+            <DialogTitle>Quick thought</DialogTitle>
+            <DialogDescription>
+              Capture an idea or note. It will appear in your Garden for triage.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="What's on your mind?"
+            value={thoughtInput}
+            onChange={(e) => setThoughtInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleQuickThoughtSubmit()}
+            className="border-border bg-input focus:ring-electric"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setThoughtModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickThoughtSubmit}
+              disabled={createMutation.isPending || !thoughtInput.trim()}
+            >
+              {createMutation.isPending ? 'Capturing…' : 'Capture'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <input
         ref={fileInputRef}

@@ -9,6 +9,7 @@ import {
   FileText,
   Library,
   Search,
+  User,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
@@ -26,6 +27,7 @@ const navItems = [
   { to: '/library', icon: Library, label: 'Library' },
   { to: '/search', icon: Search, label: 'Search' },
   { to: '/describe-to-find-search', icon: Search, label: 'Describe-to-Find' },
+  { to: '/profile', icon: User, label: 'Profile' },
 ] as const
 
 interface SidebarProps {
