@@ -1,31 +1,10 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import {
-  Search,
-  Filter,
-  Merge,
-  Check,
-  ExternalLink,
-  Leaf,
-  Link2,
-  Mic,
-  Image,
-  FileText,
-  Clock,
-} from 'lucide-react'
+import { Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -36,8 +15,14 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
-import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
+import {
+  SeedCard,
+  MergeModal,
+  FilterBar,
+  BulkActionsToolbar,
+  GardenEmptyState,
+  GardenSkeleton,
+} from '@/components/garden'
 import {
   listSeeds,
   mergeSeeds,
@@ -45,207 +30,40 @@ import {
   bulkTriage,
   type Seed,
   type SeedType,
+  type SeedCluster,
   type TriageStatus,
 } from '@/api/seeds'
 import { trackCuration } from '@/lib/analytics'
+import type { SortOption } from '@/components/garden'
 
-const SEED_TYPE_LABELS: Record<SeedType, string> = {
-  link: 'Link',
-  note: 'Note',
-  voice: 'Voice',
-  screenshot: 'Screenshot',
-  image: 'Image',
-  audio: 'Audio',
-  video: 'Video',
-}
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'date_desc', label: 'Newest first' },
+  { value: 'date_asc', label: 'Oldest first' },
+  { value: 'type', label: 'By type' },
+  { value: 'title', label: 'By title' },
+]
 
-const SEED_TYPE_ICONS: Record<SeedType, React.ComponentType<{ className?: string }>> = {
-  link: Link2,
-  note: FileText,
-  voice: Mic,
-  screenshot: Image,
-  image: Image,
-  audio: Mic,
-  video: Image,
-}
-
-function formatCaptureTime(iso: string): string {
-  try {
-    const d = new Date(iso)
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    if (diffMins < 1) return 'Just now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    const diffHours = Math.floor(diffMins / 60)
-    if (diffHours < 24) return `${diffHours}h ago`
-    const diffDays = Math.floor(diffHours / 24)
-    if (diffDays < 7) return `${diffDays}d ago`
-    return d.toLocaleDateString()
-  } catch {
-    return ''
+function sortSeeds(seeds: Seed[], sortBy: SortOption): Seed[] {
+  const copy = [...seeds]
+  switch (sortBy) {
+    case 'date_desc':
+      return copy.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    case 'date_asc':
+      return copy.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    case 'type':
+      return copy.sort((a, b) => a.type.localeCompare(b.type))
+    case 'title':
+      return copy.sort((a, b) => a.title.localeCompare(b.title))
+    default:
+      return copy
   }
 }
 
-interface SeedCardProps {
-  seed: Seed
-  triageMode: boolean
-  selected: boolean
-  onToggleSelect: (id: string) => void
-  onKeep: (id: string) => void
-  onIgnore: (id: string) => void
-  onMergeClick: (id: string) => void
-}
-
-function SeedCard({
-  seed,
-  triageMode,
-  selected,
-  onToggleSelect,
-  onKeep,
-  onIgnore,
-  onMergeClick,
-}: SeedCardProps) {
-  const cardRef = useRef<HTMLDivElement>(null)
-  const snippet =
-    seed.content?.slice(0, 120)?.trim() ||
-    seed.extracted_bullets?.[0] ||
-    (seed.source_url ? 'Link captured' : '—')
-  const TypeIcon = SEED_TYPE_ICONS[seed.type] ?? FileText
-
-  useEffect(() => {
-    if (!triageMode || !cardRef.current) return
-    const el = cardRef.current
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.target !== el && !el.contains(e.target as Node)) return
-      const key = e.key.toLowerCase()
-      if (key === 'k') {
-        e.preventDefault()
-        onKeep(seed.id)
-      } else if (key === 'i') {
-        e.preventDefault()
-        onIgnore(seed.id)
-      } else if (key === 'm') {
-        e.preventDefault()
-        onMergeClick(seed.id)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [triageMode, seed.id, onKeep, onIgnore, onMergeClick])
-
-  return (
-    <Card
-      ref={cardRef}
-      className={cn(
-        'border-border bg-card transition-all duration-200 hover:shadow-card-hover',
-        selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
-      )}
-      tabIndex={triageMode ? 0 : undefined}
-      role={triageMode ? 'article' : undefined}
-      aria-label={seed.title}
-    >
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-sm font-medium line-clamp-2 pr-8">{seed.title}</CardTitle>
-          {triageMode && (
-            <button
-              type="button"
-              onClick={() => onToggleSelect(seed.id)}
-              className={cn(
-                'shrink-0 rounded-lg border p-1.5 transition-colors duration-200 hover:border-primary/50',
-                selected
-                  ? 'border-primary bg-primary/15 text-primary'
-                  : 'border-border text-muted-foreground'
-              )}
-              aria-label={selected ? 'Deselect' : 'Select'}
-            >
-              {selected ? <Check className="h-4 w-4" /> : <span className="block h-4 w-4" />}
-            </button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 space-y-3">
-        <p className="text-caption text-muted-foreground line-clamp-2">{snippet}</p>
-        {seed.extracted_bullets && seed.extracted_bullets.length > 0 && (
-          <ul className="text-caption text-muted-foreground list-disc list-inside space-y-0.5">
-            {seed.extracted_bullets.slice(0, 3).map((b, i) => (
-              <li key={i} className="line-clamp-1">
-                {b}
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex flex-wrap gap-1.5">
-          {seed.tags?.slice(0, 4).map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-caption text-muted-foreground"
-            >
-              {t}
-            </span>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border">
-          <span className="flex items-center gap-1.5 text-caption text-muted-foreground">
-            <TypeIcon className="h-3.5 w-3.5" />
-            {SEED_TYPE_LABELS[seed.type]}
-          </span>
-          <span className="flex items-center gap-1 text-caption text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            {formatCaptureTime(seed.created_at)}
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          <Button variant="ghost" size="sm" onClick={() => onKeep(seed.id)}>
-            Keep
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => onMergeClick(seed.id)}>
-            Merge
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => onIgnore(seed.id)}
-          >
-            Ignore
-          </Button>
-          <Link to={`/canvases?seed=${seed.id}`}>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Open in Canvas">
-              <ExternalLink className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function GardenSkeleton() {
-  return (
-    <div className="space-y-8">
-      {[1, 2].map((i) => (
-        <div key={i}>
-          <Skeleton className="h-6 w-40 mb-3 rounded" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((j) => (
-              <Card key={j} className="border-border bg-card">
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-3/4 rounded" />
-                </CardHeader>
-                <CardContent className="pt-0 space-y-2">
-                  <Skeleton className="h-3 w-full rounded" />
-                  <Skeleton className="h-3 w-4/5 rounded" />
-                  <Skeleton className="h-6 w-24 rounded mt-3" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
+function sortClusters(clusters: SeedCluster[], sortBy: SortOption): SeedCluster[] {
+  return clusters.map((c) => ({
+    ...c,
+    seeds: c.seeds ? sortSeeds(c.seeds, sortBy) : [],
+  }))
 }
 
 export function GardenPage() {
@@ -261,15 +79,20 @@ export function GardenPage() {
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [clustered, setClustered] = useState(true)
+  const [sortBy, setSortBy] = useState<SortOption>('date_desc')
 
-  const listParams = {
-    limit: 100,
-    clustered: true,
-    ...(filterType && { type: filterType as SeedType }),
-    ...(filterTag && { tag: filterTag }),
-    ...(filterDateFrom && { dateFrom: filterDateFrom }),
-    ...(filterDateTo && { dateTo: filterDateTo }),
-  }
+  const listParams = useMemo(
+    () => ({
+      limit: 100,
+      clustered,
+      ...(filterType && { type: filterType as SeedType }),
+      ...(filterTag && { tag: filterTag }),
+      ...(filterDateFrom && { dateFrom: filterDateFrom }),
+      ...(filterDateTo && { dateTo: filterDateTo }),
+    }),
+    [clustered, filterType, filterTag, filterDateFrom, filterDateTo]
+  )
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['seeds', 'garden', listParams],
@@ -358,21 +181,41 @@ export function GardenPage() {
   })
 
   const clusters = data?.clusters ?? []
-  const allSeeds = clusters.flatMap((c) => c.seeds ?? [])
-  const filteredBySearch =
-    search.trim() === ''
-      ? clusters
-      : clusters
+  const seeds = data?.seeds ?? []
+  const allSeeds = clustered
+    ? clusters.flatMap((c) => c.seeds ?? [])
+    : seeds
+
+  const filteredBySearch = useMemo(() => {
+    const searchLower = search.trim().toLowerCase()
+    if (!searchLower) {
+      return clustered
+        ? sortClusters(clusters, sortBy)
+        : [{ id: 'flat', label: 'All seeds', seeds: sortSeeds(seeds, sortBy) }]
+    }
+    const filterSeed = (s: Seed) =>
+      s.title.toLowerCase().includes(searchLower) ||
+      s.content?.toLowerCase().includes(searchLower) ||
+      s.tags?.some((t) => t.toLowerCase().includes(searchLower))
+    if (clustered) {
+      return sortClusters(
+        clusters
           .map((c) => ({
             ...c,
-            seeds: (c.seeds ?? []).filter(
-              (s) =>
-                s.title.toLowerCase().includes(search.toLowerCase()) ||
-                s.content?.toLowerCase().includes(search.toLowerCase()) ||
-                s.tags?.some((t) => t.toLowerCase().includes(search.toLowerCase()))
-            ),
+            seeds: (c.seeds ?? []).filter(filterSeed),
           }))
-          .filter((c) => (c.seeds?.length ?? 0) > 0)
+          .filter((c) => (c.seeds?.length ?? 0) > 0),
+        sortBy
+      )
+    }
+    return [
+      {
+        id: 'flat',
+        label: 'All seeds',
+        seeds: sortSeeds(seeds.filter(filterSeed), sortBy),
+      },
+    ]
+  }, [search, clustered, clusters, seeds, sortBy])
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -417,25 +260,8 @@ export function GardenPage() {
     const id = ignoreTargetId
     if (!id) return
     setIgnoreTargetId(null)
-    triageMutation.mutate(
-      { id, triage_status: 'ignored' },
-      {
-        onSuccess: () => {
-          toast.success('Seed ignored', {
-            action: {
-              label: 'Undo',
-              onClick: () => {
-                updateSeedTriage(id, null).then(() => {
-              queryClient.invalidateQueries({ queryKey: ['seeds'] })
-              toast.success('Undone')
-            })
-              },
-            },
-          })
-        },
-      }
-    )
-  }, [ignoreTargetId, triageMutation, queryClient])
+    triageMutation.mutate({ id, triage_status: 'ignored' })
+  }, [ignoreTargetId, triageMutation])
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -446,13 +272,31 @@ export function GardenPage() {
             Seeds grouped by topic — triage and merge
           </p>
         </div>
-        <Button
-          variant={triageMode ? 'default' : 'outline'}
-          onClick={() => setTriageMode((v) => !v)}
-          className="transition-all duration-200 hover:scale-[1.02]"
-        >
-          {triageMode ? 'Exit triage' : 'Triage mode'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={clustered ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setClustered(true)}
+            className="transition-all duration-200 hover:scale-[1.02]"
+          >
+            Clustered
+          </Button>
+          <Button
+            variant={!clustered ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setClustered(false)}
+            className="transition-all duration-200 hover:scale-[1.02]"
+          >
+            Flat
+          </Button>
+          <Button
+            variant={triageMode ? 'default' : 'outline'}
+            onClick={() => setTriageMode((v) => !v)}
+            className="transition-all duration-200 hover:scale-[1.02]"
+          >
+            {triageMode ? 'Exit triage' : 'Triage mode'}
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -465,85 +309,30 @@ export function GardenPage() {
             className="pl-9"
           />
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setShowFilters((v) => !v)}
-          className="shrink-0"
-        >
-          <Filter className="h-4 w-4 mr-2" />
-          Filter & sort
-        </Button>
+        <FilterBar
+          filterType={filterType}
+          filterTag={filterTag}
+          filterDateFrom={filterDateFrom}
+          filterDateTo={filterDateTo}
+          sortBy={sortBy}
+          sortOptions={SORT_OPTIONS}
+          onFilterTypeChange={setFilterType}
+          onFilterTagChange={setFilterTag}
+          onFilterDateFromChange={setFilterDateFrom}
+          onFilterDateToChange={setFilterDateTo}
+          onSortChange={setSortBy}
+          showFilters={showFilters}
+          onShowFiltersChange={setShowFilters}
+        />
       </div>
 
-      {showFilters && (
-        <Card className="border-border bg-card p-4 animate-fade-in">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <label className="text-caption text-muted-foreground block mb-1">Type</label>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="w-full h-10 rounded-lg border border-border bg-input px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">All</option>
-                {(Object.keys(SEED_TYPE_LABELS) as SeedType[]).map((t) => (
-                  <option key={t} value={t}>
-                    {SEED_TYPE_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-caption text-muted-foreground block mb-1">Tag</label>
-              <Input
-                placeholder="Filter by tag"
-                value={filterTag}
-                onChange={(e) => setFilterTag(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-caption text-muted-foreground block mb-1">From date</label>
-              <Input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-caption text-muted-foreground block mb-1">To date</label>
-              <Input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-              />
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {triageMode && selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 animate-fade-in">
-          <span className="text-sm text-muted-foreground">{selectedIds.size} selected</span>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setMergeOpen(true)}
-            className="transition-all duration-200 hover:scale-[1.02]"
-          >
-            <Merge className="h-4 w-4 mr-1" /> Merge
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleBulkKeep}>
-            Keep
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-destructive hover:text-destructive"
-            onClick={handleBulkIgnore}
-          >
-            Ignore
-          </Button>
-        </div>
+      {triageMode && (
+        <BulkActionsToolbar
+          selectedCount={selectedIds.size}
+          onMerge={() => setMergeOpen(true)}
+          onBulkKeep={handleBulkKeep}
+          onBulkIgnore={handleBulkIgnore}
+        />
       )}
 
       <AlertDialog
@@ -590,26 +379,16 @@ export function GardenPage() {
       )}
 
       {!isLoading && !isError && filteredBySearch.length === 0 && (
-        <Card className="border-border bg-card">
-          <CardContent className="py-16 text-center">
-            <Leaf className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-section font-semibold text-foreground mb-2">No seeds yet</h3>
-            <p className="text-caption text-muted-foreground max-w-sm mx-auto mb-4">
-              Capture links, voice notes, and quick thoughts from Home. They will appear here for
-              triage and merging.
-            </p>
-            <Link to="/">
-              <Button className="transition-all duration-200 hover:scale-[1.02]">Go to Home</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <GardenEmptyState />
       )}
 
       {!isLoading && !isError && filteredBySearch.length > 0 && (
         <div className="space-y-8">
           {filteredBySearch.map((cluster) => (
             <div key={cluster.id} className="animate-fade-in">
-              <h2 className="text-section font-semibold text-foreground mb-3">{cluster.label}</h2>
+              <h2 className="text-section font-semibold text-foreground mb-3">
+                {cluster.label}
+              </h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {(cluster.seeds ?? []).map((seed) => (
                   <SeedCard
@@ -638,7 +417,10 @@ export function GardenPage() {
         isMerging={mergeMutation.isPending}
       />
 
-      <AlertDialog open={!!ignoreTargetId} onOpenChange={(open) => !open && setIgnoreTargetId(null)}>
+      <AlertDialog
+        open={!!ignoreTargetId}
+        onOpenChange={(open) => !open && setIgnoreTargetId(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ignore seed?</AlertDialogTitle>
@@ -658,153 +440,5 @@ export function GardenPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
-
-interface MergeModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  selectedIds: string[]
-  seeds: Seed[]
-  onMerge: (payload: {
-    seed_ids: string[]
-    title?: string
-    tags?: string[]
-    content?: string
-    extracted_bullets?: string[]
-  }) => void
-  isMerging: boolean
-}
-
-function MergeModal({
-  open,
-  onOpenChange,
-  selectedIds,
-  seeds,
-  onMerge,
-  isMerging,
-}: MergeModalProps) {
-  const [title, setTitle] = useState('')
-  const [tagsStr, setTagsStr] = useState('')
-  const [content, setContent] = useState('')
-  const [bulletsStr, setBulletsStr] = useState('')
-
-  const defaultTitle = seeds.length > 0 ? seeds.map((s) => s.title).join(' / ').slice(0, 500) : ''
-  const defaultTags = Array.from(new Set(seeds.flatMap((s) => s.tags ?? []))).join(', ')
-  const defaultContent =
-    seeds.length > 0 ? seeds.map((s) => `## ${s.title}\n${s.content}`).join('\n\n') : ''
-  const defaultBullets =
-    seeds.length > 0 ? seeds.flatMap((s) => s.extracted_bullets ?? []).join('\n') : ''
-
-  const handleOpen = (isOpen: boolean) => {
-    if (isOpen) {
-      setTitle(defaultTitle)
-      setTagsStr(defaultTags)
-      setContent(defaultContent)
-      setBulletsStr(defaultBullets)
-    }
-    onOpenChange(isOpen)
-  }
-
-  const handleSubmit = () => {
-    if (selectedIds.length < 2) return
-    const tags = tagsStr
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
-    const extracted_bullets = bulletsStr
-      .split('\n')
-      .map((b) => b.trim())
-      .filter(Boolean)
-    onMerge({
-      seed_ids: selectedIds,
-      title: title.trim() || undefined,
-      tags: tags.length > 0 ? tags : undefined,
-      content: content.trim() || undefined,
-      extracted_bullets: extracted_bullets.length > 0 ? extracted_bullets : undefined,
-    })
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent showClose={true} className="max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Merge seeds</DialogTitle>
-          <DialogDescription>
-            Edit combined title, tags, content, and bullets. Original seeds are listed as provenance.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2 overflow-y-auto">
-          {selectedIds.length < 2 && (
-            <p className="text-caption text-primary">
-              Select at least 2 seeds to merge (use Triage mode).
-            </p>
-          )}
-          <p className="text-caption text-muted-foreground">
-            Provenance: {seeds.length} seed{seeds.length !== 1 ? 's' : ''} —{' '}
-            {seeds.map((s) => s.title).join('; ')}
-          </p>
-          <div>
-            <label htmlFor="merge-title" className="text-caption text-foreground block mb-1">
-              Combined title
-            </label>
-            <Input
-              id="merge-title"
-              placeholder="Combined title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="merge-tags" className="text-caption text-foreground block mb-1">
-              Tags (comma separated)
-            </label>
-            <Input
-              id="merge-tags"
-              placeholder="Tags"
-              value={tagsStr}
-              onChange={(e) => setTagsStr(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="merge-content" className="text-caption text-foreground block mb-1">
-              Content
-            </label>
-            <textarea
-              id="merge-content"
-              rows={4}
-              className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric/50"
-              placeholder="Combined content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="merge-bullets" className="text-caption text-foreground block mb-1">
-              Extracted bullets (one per line)
-            </label>
-            <textarea
-              id="merge-bullets"
-              rows={3}
-              className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric/50"
-              placeholder="One bullet per line"
-              value={bulletsStr}
-              onChange={(e) => setBulletsStr(e.target.value)}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isMerging || selectedIds.length < 2}
-          >
-            {isMerging ? 'Merging…' : 'Merge'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
