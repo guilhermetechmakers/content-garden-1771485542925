@@ -121,8 +121,15 @@ export function SeedCaptureAndStorage({
       await seedCaptureAndStorageService.uploadToSignedUrl(uploadUrl, file, contentType)
       createMutation.mutate({
         type,
-        title: file.name || (type === 'voice' ? 'Voice note' : 'Screenshot'),
-        attachments: [{ key, contentType, name: file.name }],
+        title: file.name || (type === 'voice' ? 'Voice note' : type === 'screenshot' ? 'Screenshot' : 'Media capture'),
+        attachments: [
+          {
+            key,
+            contentType,
+            name: file.name,
+            sizeBytes: file.size,
+          },
+        ],
       })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed')

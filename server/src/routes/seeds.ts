@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
-import { seedRepository, type SeedType, type TriageStatus } from '../models/seed.js'
+import { seedRepository, type SeedType } from '../models/seed.js'
 import { storageService } from '../services/storage.js'
 import { checkUploadQuota, recordUpload } from '../middleware/quota.js'
 import { transcriptionWorker } from '../workers/transcriptionWorker.js'

@@ -93,8 +93,7 @@ router.post('/slots/undo', (req: Request, res: Response) => {
 })
 
 /** GET /runway/history – posted history */
-router.get('/history', (req: Request, res: Response) => {
-  const limit = Math.min(Number((req.query as { limit?: string }).limit) || 20, 50)
+router.get('/history', (_req: Request, res: Response) => {
   res.json({ history: [] })
 })
 

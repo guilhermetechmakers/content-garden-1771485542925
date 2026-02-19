@@ -127,7 +127,7 @@ router.post('/', (req: Request, res: Response) => {
   const userId = getUserId(req)
   const now = new Date().toISOString()
 
-  const posts: DropPost[] = (parsed.data.posts ?? []).map((p, i) => ({
+  const posts: DropPost[] = (parsed.data.posts ?? []).map((p) => ({
     id: generatePostId(),
     hook: p.hook ?? '',
     value: p.value ?? '',
@@ -163,7 +163,7 @@ router.post('/from-canvas', (req: Request, res: Response) => {
   const userId = getUserId(req)
   const now = new Date().toISOString()
 
-  const posts: DropPost[] = Array.from({ length: 5 }, (_, i) => ({
+  const posts: DropPost[] = Array.from({ length: 5 }, () => ({
     id: generatePostId(),
     hook: '',
     value: '',

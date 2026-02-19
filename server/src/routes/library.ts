@@ -83,7 +83,7 @@ router.get('/published', (req: Request, res: Response) => {
 })
 
 /** GET /library/assets */
-router.get('/assets', (req: Request, res: Response) => {
+router.get('/assets', (_req: Request, res: Response) => {
   res.json({ assets: [] })
 })
 
