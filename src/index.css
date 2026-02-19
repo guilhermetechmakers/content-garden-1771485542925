@@ -27,6 +27,7 @@
     --orange: 255 127 63;     /* #FF7F3F */
     --purple: 162 89 255;
     --yellow: 247 224 110;    /* #F7E06E */
+    --radius: 0.625rem;       /* 10px - card/surface radius */
   }
 
   * {

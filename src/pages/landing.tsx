@@ -79,6 +79,8 @@ export function LandingPage() {
           <div className="flex gap-6">
             <Link to="/privacy" className="text-caption text-muted-foreground hover:text-foreground">Privacy</Link>
             <Link to="/terms" className="text-caption text-muted-foreground hover:text-foreground">Terms</Link>
+            <Link to="/cookie" className="text-caption text-muted-foreground hover:text-foreground">Cookies</Link>
+            <Link to="/help" className="text-caption text-muted-foreground hover:text-foreground">Help</Link>
           </div>
         </div>
       </footer>

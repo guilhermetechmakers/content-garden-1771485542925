@@ -63,7 +63,7 @@ export function LoginPage() {
                 )}
               </div>
               <div className="flex items-center justify-between text-sm">
-                <Link to="/login/forgot" className="text-primary hover:underline">
+                <Link to="/forgot-password" className="text-primary hover:underline">
                   Forgot password?
                 </Link>
               </div>

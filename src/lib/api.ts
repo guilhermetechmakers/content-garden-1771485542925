@@ -6,8 +6,24 @@ export type ApiError = {
   status?: number
 }
 
+export interface ApiResponse<T> {
+  data: T | null
+  error: string | null
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  count: number
+  page: number
+  limit: number
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token')
+      window.location.href = '/login'
+    }
     const err: ApiError = {
       message: res.statusText,
       status: res.status,
@@ -32,9 +48,9 @@ function getHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
-  const token = typeof window !== 'undefined' && (window as unknown as { __authToken?: string }).__authToken
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('auth_token')
+    if (token) headers['Authorization'] = `Bearer ${token}`
   }
   return headers
 }

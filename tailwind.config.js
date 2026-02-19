@@ -70,7 +70,7 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(16px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        'slide-in-right': {
+        'drawer-in-right': {
           '0%': { transform: 'translateX(100%)' },
           '100%': { transform: 'translateX(0)' },
         },
@@ -81,13 +81,35 @@ export default {
           '0%, 100%': { boxShadow: '0 0 12px rgba(57, 255, 144, 0.2)' },
           '50%': { boxShadow: '0 0 24px rgba(57, 255, 144, 0.4)' },
         },
+        'slide-in-left': {
+          '0%': { opacity: '0', transform: 'translateX(-20px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        'slide-in-right': {
+          '0%': { opacity: '0', transform: 'translateX(20px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        'scale-in': {
+          '0%': { opacity: '0', transform: 'scale(0.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'bounce-in': {
+          '0%': { opacity: '0', transform: 'scale(0.3)' },
+          '50%': { opacity: '1', transform: 'scale(1.05)' },
+          '70%': { transform: 'scale(0.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.3s ease-out forwards',
         'fade-in-up': 'fade-in-up 0.4s ease-out forwards',
-        'slide-in-right': 'slide-in-right 0.3s ease-out',
+        'drawer-in-right': 'drawer-in-right 0.3s ease-out',
         'shimmer': 'shimmer 1.5s infinite',
         'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+        'slide-in-left': 'slide-in-left 0.3s ease-out',
+        'slide-in-right': 'slide-in-right 0.3s ease-out forwards',
+        'scale-in': 'scale-in 0.2s ease-out',
+        'bounce-in': 'bounce-in 0.6s ease-out',
       },
       transitionDuration: {
         '200': '200ms',
@@ -95,5 +117,5 @@ export default {
       },
     },
   },
-  plugins: [typography],
+  plugins: [require('tailwindcss-animate'), typography],
 }
