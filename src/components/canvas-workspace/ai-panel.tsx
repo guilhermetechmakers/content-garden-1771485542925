@@ -4,7 +4,6 @@
  */
 
 import { useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
 import { Sparkles, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -26,12 +25,19 @@ export interface AIPanelProps {
   aiAvailable?: boolean
   onAction?: (action: string) => void
   isActionLoading?: boolean
+  /** Canvas ID for Publish/Export to Drop */
+  canvasId?: string | null
+  onPublishToDrop?: () => void
+  isPublishLoading?: boolean
 }
 
 export function AIPanel({
   aiAvailable = false,
   onAction,
   isActionLoading = false,
+  canvasId,
+  onPublishToDrop,
+  isPublishLoading = false,
 }: AIPanelProps) {
   const [tone, setTone] = useState<string>(TONE_OPTIONS[0])
   const [length, setLength] = useState<string>(LENGTH_OPTIONS[1])
@@ -123,12 +129,27 @@ export function AIPanel({
         </div>
       </ScrollArea>
       <div className="mt-auto border-t border-border p-3">
-        <Button asChild className="w-full transition-all duration-200 hover:scale-[1.02]">
-          <Link to="/drops">
-            <Download className="h-4 w-4 mr-2" />
+        {onPublishToDrop && canvasId ? (
+          <Button
+            className="w-full transition-all duration-200 hover:scale-[1.02]"
+            onClick={onPublishToDrop}
+            disabled={isPublishLoading}
+          >
+            {isPublishLoading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
+            ) : (
+              <Download className="h-4 w-4 mr-2" aria-hidden />
+            )}
             Publish / Export to Drop
-          </Link>
-        </Button>
+          </Button>
+        ) : (
+          <Button asChild className="w-full transition-all duration-200 hover:scale-[1.02]">
+            <a href="/drops" className="flex items-center justify-center">
+              <Download className="h-4 w-4 mr-2" aria-hidden />
+              Publish / Export to Drop
+            </a>
+          </Button>
+        )}
       </div>
     </aside>
   )

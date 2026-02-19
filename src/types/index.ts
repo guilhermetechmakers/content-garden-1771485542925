@@ -73,6 +73,8 @@ export interface CanvasVersion {
   created_at: string
 }
 
+export type PlatformVariant = 'linkedin' | 'x' | 'short_video' | 'carousel'
+
 export interface DropPost {
   id: string
   hook: string
@@ -80,15 +82,19 @@ export interface DropPost {
   example: string
   cta: string
   variants?: Record<string, string>
+  asset_urls?: string[]
+  seed_ids?: string[]
 }
 
 export interface Drop {
   id: string
   title: string
-  canvas_id: string
+  canvas_id?: string | null
+  canvas_source?: string | null
   posts: DropPost[]
   status: 'draft' | 'ready' | 'exported'
   created_at: string
+  updated_at?: string
 }
 
 export type RunwaySlotStatus = 'empty' | 'filled' | 'posted'

@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { History, Copy, RefreshCw } from 'lucide-react'
+import { History, Copy, RefreshCw, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { SlotCard, SlotDetailPanel, PostedHistoryDialog, SLOT_DROP_TYPE } from '@/components/runway'
@@ -12,6 +13,7 @@ import {
   markSlotPosted,
   undoSlot,
 } from '@/api/runway'
+import { listDrops } from '@/api/drops'
 import { trackRunwaySlot } from '@/lib/analytics'
 import type { RunwaySlot } from '@/types'
 import { cn } from '@/lib/utils'
@@ -34,6 +36,11 @@ export function RunwayPage() {
     queryKey: ['runway', 'history'],
     queryFn: () => fetchRunwayHistory(20),
     enabled: historyOpen,
+  })
+
+  const { data: drops = [] } = useQuery({
+    queryKey: ['drops'],
+    queryFn: listDrops,
   })
 
   const assignMutation = useMutation({
@@ -200,31 +207,47 @@ export function RunwayPage() {
 
       <Card className="border-border bg-card">
         <CardContent className="py-4">
-          <h3 className="text-section font-semibold text-foreground mb-2">Empty slot suggest</h3>
+          <h3 className="text-section font-semibold text-foreground mb-2">Posts from Drops</h3>
           <p className="text-caption text-muted-foreground mb-3">
-            AI-suggested posts from your Drops to fill empty slots. Drag a post into a slot above.
+            Drag a post from your Drops into a slot above to schedule it.
           </p>
           <div className="flex flex-wrap gap-2">
-            <div
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData(SLOT_DROP_TYPE, 'drop-post-1')
-                e.dataTransfer.setData('text/plain', 'drop-post-1')
-                e.dataTransfer.effectAllowed = 'copy'
-              }}
-              className="cursor-grab active:cursor-grabbing rounded-lg border border-border bg-input/50 px-3 py-2 text-sm text-foreground transition-shadow hover:shadow-md"
-              role="button"
-              tabIndex={0}
-              aria-label="Drag to assign post to slot"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') e.preventDefault()
-              }}
-            >
-              Sample post — Hook and value…
-            </div>
+            {drops.length === 0 && (
+              <p className="text-caption text-muted-foreground">No drops yet.</p>
+            )}
+            {drops.flatMap((drop) =>
+              drop.posts.map((post) => (
+                <div
+                  key={post.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(SLOT_DROP_TYPE, post.id)
+                    e.dataTransfer.setData('text/plain', post.id)
+                    e.dataTransfer.effectAllowed = 'copy'
+                  }}
+                  className="cursor-grab active:cursor-grabbing rounded-lg border border-border bg-input/50 px-3 py-2 text-sm text-foreground transition-all duration-200 hover:shadow-md hover:scale-[1.02] hover:border-electric/30 max-w-[240px]"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Drag post: ${post.hook || 'Untitled'} to slot`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') e.preventDefault()
+                  }}
+                >
+                  <span className="line-clamp-2 font-medium">
+                    {post.hook || post.value || 'Untitled post'}
+                  </span>
+                  <span className="text-caption text-muted-foreground block mt-0.5">
+                    {drop.title}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
-          <Button variant="outline" size="sm" className="mt-3">
-            Load suggestions
+          <Button variant="outline" size="sm" className="mt-3" asChild>
+            <Link to="/drops">
+              <Package className="h-4 w-4 mr-1" />
+              Open Drops
+            </Link>
           </Button>
         </CardContent>
       </Card>

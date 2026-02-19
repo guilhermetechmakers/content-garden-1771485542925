@@ -28,6 +28,7 @@ import {
   createCanvas,
   updateCanvas,
 } from '@/api/canvases'
+import { createDropFromCanvas } from '@/api/drops'
 import type { Canvas, CanvasNode, CanvasEdge } from '@/types'
 import type { Seed } from '@/api/seeds'
 
@@ -81,6 +82,19 @@ export function CanvasWorkspacePage() {
     onError: () => {
       setAutosaveStatus('error')
       toast.error('Failed to save canvas')
+    },
+  })
+
+  const createDropMutation = useMutation({
+    mutationFn: ({ canvasId: cid, title }: { canvasId: string; title?: string }) =>
+      createDropFromCanvas(cid, title),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['drops'] })
+      navigate(`/drops/${created.id}`)
+      toast.success('Drop created from canvas')
+    },
+    onError: (err: { message?: string }) => {
+      toast.error(err?.message ?? 'Failed to create drop')
     },
   })
 
@@ -218,6 +232,16 @@ export function CanvasWorkspacePage() {
         aiAvailable={false}
         onAction={handleAIAction}
         isActionLoading={false}
+        canvasId={canvas?.id ?? canvasId ?? undefined}
+        onPublishToDrop={() => {
+          const id = canvas?.id ?? canvasId
+          if (id) {
+            createDropMutation.mutate({ canvasId: id, title: canvas?.title })
+          } else {
+            toast.error('Save your canvas first to create a Drop.')
+          }
+        }}
+        isPublishLoading={createDropMutation.isPending}
       />
 
       <VersionHistoryDialog

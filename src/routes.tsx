@@ -39,6 +39,7 @@ export const router = createBrowserRouter([
       { path: 'canvases', element: <CanvasesPage /> },
       { path: 'canvases/:canvasId', element: <CanvasWorkspacePage /> },
       { path: 'drops', element: <DropsPage /> },
+      { path: 'drops/:dropId', element: <DropsPage /> },
       { path: 'runway', element: <RunwayPage /> },
       { path: 'snippets', element: <SnippetsPage /> },
       { path: 'library', element: <LibraryPage /> },
