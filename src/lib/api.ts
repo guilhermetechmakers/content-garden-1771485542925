@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase'
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
 export type ApiError = {
@@ -21,7 +23,7 @@ export interface PaginatedResponse<T> {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     if (res.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token')
+      await supabase.auth.signOut()
       window.location.href = '/login'
     }
     const err: ApiError = {
@@ -44,58 +46,64 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return undefined as T
 }
 
-function getHeaders(): HeadersInit {
+async function getHeaders(): Promise<HeadersInit> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('auth_token')
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
   return headers
 }
 
 export const api = {
-  get<T>(path: string, options?: RequestInit): Promise<T> {
+  async get<T>(path: string, options?: RequestInit): Promise<T> {
+    const headers = await getHeaders()
     return fetch(`${API_BASE}${path}`, {
       ...options,
       method: 'GET',
-      headers: getHeaders(),
+      headers,
     }).then(handleResponse<T>)
   },
 
-  post<T>(path: string, body?: unknown, options?: RequestInit): Promise<T> {
+  async post<T>(path: string, body?: unknown, options?: RequestInit): Promise<T> {
+    const headers = await getHeaders()
     return fetch(`${API_BASE}${path}`, {
       ...options,
       method: 'POST',
-      headers: getHeaders(),
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }).then(handleResponse<T>)
   },
 
-  put<T>(path: string, body?: unknown, options?: RequestInit): Promise<T> {
+  async put<T>(path: string, body?: unknown, options?: RequestInit): Promise<T> {
+    const headers = await getHeaders()
     return fetch(`${API_BASE}${path}`, {
       ...options,
       method: 'PUT',
-      headers: getHeaders(),
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }).then(handleResponse<T>)
   },
 
-  patch<T>(path: string, body?: unknown, options?: RequestInit): Promise<T> {
+  async patch<T>(path: string, body?: unknown, options?: RequestInit): Promise<T> {
+    const headers = await getHeaders()
     return fetch(`${API_BASE}${path}`, {
       ...options,
       method: 'PATCH',
-      headers: getHeaders(),
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }).then(handleResponse<T>)
   },
 
-  delete<T>(path: string, options?: RequestInit): Promise<T> {
+  async delete<T>(path: string, options?: RequestInit): Promise<T> {
+    const headers = await getHeaders()
     return fetch(`${API_BASE}${path}`, {
       ...options,
       method: 'DELETE',
-      headers: getHeaders(),
+      headers,
     }).then(handleResponse<T>)
   },
 }

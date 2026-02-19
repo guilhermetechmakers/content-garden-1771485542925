@@ -1,5 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/app-shell'
+import { ProtectedRoute } from '@/components/auth/protected-route'
+import { AuthLoadingSkeleton } from '@/components/auth/auth-loading-skeleton'
 import { LandingPage } from '@/pages/landing'
 import { HomePage } from '@/pages/home'
 import { GardenPage } from '@/pages/garden'
@@ -15,6 +17,7 @@ import { LoginPage } from '@/pages/auth/login'
 import { SignupPage } from '@/pages/auth/signup'
 import { ForgotPasswordPage } from '@/pages/auth/forgot-password'
 import { EmailVerificationPage } from '@/pages/auth/email-verification'
+import { ResetPasswordPage } from '@/pages/auth/reset-password'
 import { ProfilePage } from '@/pages/profile'
 import { AdminPage } from '@/pages/admin'
 import { PrivacyPage } from '@/pages/legal/privacy'
@@ -30,9 +33,14 @@ export const router = createBrowserRouter([
   { path: '/signup', element: <SignupPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/email-verification', element: <EmailVerificationPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <ProtectedRoute fallback={<AuthLoadingSkeleton />}>
+        <AppShell />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: <HomePage /> },
       { path: 'garden', element: <GardenPage /> },
