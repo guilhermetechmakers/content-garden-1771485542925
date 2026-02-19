@@ -1,95 +1,269 @@
-import { useParams, Link } from 'react-router-dom'
-import { Sparkles, Download } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
+/**
+ * Canvas Workspace (Visual Composer): split-pane editor with Seeds (left),
+ * freeform canvas (center), AI panel (right). Version history, Publish/Export,
+ * collaboration primitives and Snippets/Assets integration points.
+ */
 
-const mockSeeds = [
-  { id: '1', title: 'Article on creator economy', type: 'seed' },
-  { id: '2', title: 'Voice: monetization ideas', type: 'seed' },
-]
-const aiActions = [
-  'Draft 5 angles',
-  'Generate hooks',
-  'Turn selection into thread',
-  'Summarize selected Seeds',
-]
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  SeedsPanel,
+  CanvasEditor,
+  AIPanel,
+  VersionHistoryDialog,
+} from '@/components/canvas-workspace'
+import {
+  getCanvas,
+  createCanvas,
+  updateCanvas,
+} from '@/api/canvases'
+import type { Canvas, CanvasNode, CanvasEdge } from '@/types'
+import type { Seed } from '@/api/seeds'
+
+const AUTOSAVE_DEBOUNCE_MS = 2000
+
+interface UpdateCanvasArgs {
+  id: string
+  payload: { nodes: CanvasNode[]; edges: CanvasEdge[]; title?: string }
+}
 
 export function CanvasWorkspacePage() {
   const { canvasId } = useParams()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const isNew = canvasId === 'new' || !canvasId
+
+  const [localCanvas, setLocalCanvas] = useState<Canvas | null>(null)
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false)
+  const [snippetModalOpen, setSnippetModalOpen] = useState(false)
+  const [assetModalOpen, setAssetModalOpen] = useState(false)
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const { data: serverCanvas, isLoading } = useQuery({
+    queryKey: ['canvas', canvasId],
+    queryFn: () => getCanvas(canvasId!),
+    enabled: !isNew && !!canvasId,
+  })
+
+  const createMutation = useMutation({
+    mutationFn: createCanvas,
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['canvases'] })
+      navigate(`/canvases/${created.id}`, { replace: true })
+      setLocalCanvas(created)
+      toast.success('Canvas created')
+    },
+    onError: (err: { message?: string }) => {
+      toast.error(err?.message ?? 'Failed to create canvas')
+      setAutosaveStatus('error')
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: UpdateCanvasArgs) => updateCanvas(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canvas', canvasId] })
+      queryClient.invalidateQueries({ queryKey: ['canvases'] })
+      setAutosaveStatus('saved')
+    },
+    onError: () => {
+      setAutosaveStatus('error')
+      toast.error('Failed to save canvas')
+    },
+  })
+
+  useEffect(() => {
+    if (serverCanvas && !isNew) {
+      setLocalCanvas(serverCanvas)
+    }
+  }, [serverCanvas, isNew])
+
+  const scheduleAutosave = useCallback(
+    (nodes: CanvasNode[], edges: CanvasEdge[], title?: string) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+      if (isNew) return
+      const id = localCanvas?.id ?? canvasId
+      if (!id) return
+      setAutosaveStatus('idle')
+      saveTimeoutRef.current = setTimeout(() => {
+        setAutosaveStatus('saving')
+        updateMutation.mutate({
+          id,
+          payload: { nodes, edges, title },
+        })
+      }, AUTOSAVE_DEBOUNCE_MS)
+    },
+    [isNew, localCanvas?.id, canvasId, updateMutation]
+  )
+
+  const handleNodesChange = useCallback(
+    (nodes: CanvasNode[]) => {
+      setLocalCanvas((prev) => {
+        if (!prev) return null
+        const next = { ...prev, nodes }
+        scheduleAutosave(next.nodes, next.edges, next.title)
+        return next
+      })
+    },
+    [scheduleAutosave]
+  )
+
+  const handleEdgesChange = useCallback(
+    (edges: CanvasEdge[]) => {
+      setLocalCanvas((prev) => {
+        if (!prev) return null
+        const next = { ...prev, edges }
+        scheduleAutosave(next.nodes, next.edges, next.title)
+        return next
+      })
+    },
+    [scheduleAutosave]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    }
+  }, [])
+
+  const handleAddSeedToCanvas = useCallback(
+    (seed: Seed) => {
+      const centerX = 300
+      const centerY = 200
+      const newNode: CanvasNode = {
+        id: `node-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        type: 'seed',
+        position: { x: centerX, y: centerY },
+        data: {
+          seedId: seed.id,
+          title: seed.title,
+          content: seed.content,
+          extracted_bullets: seed.extracted_bullets,
+        },
+      }
+      if (localCanvas) {
+        handleNodesChange([...localCanvas.nodes, newNode])
+      } else if (isNew) {
+        createMutation.mutate({
+          title: 'Untitled canvas',
+          nodes: [newNode],
+          edges: [],
+        })
+      }
+    },
+    [localCanvas, isNew, createMutation, handleNodesChange]
+  )
+
+  const handleRestoreVersion = useCallback(
+    (version: { nodes: CanvasNode[]; edges: CanvasEdge[] }) => {
+      setLocalCanvas((prev) =>
+        prev ? { ...prev, nodes: version.nodes, edges: version.edges } : null
+      )
+      if (localCanvas?.id) {
+        updateMutation.mutate({
+          id: localCanvas.id,
+          payload: { nodes: version.nodes, edges: version.edges },
+        })
+      }
+      toast.success('Version restored')
+    },
+    [localCanvas, updateMutation]
+  )
+
+  const handleAIAction = useCallback((_action: string) => {
+    toast.info('AI action will run when AI tools are configured.')
+  }, [])
+
+  if (!isNew && isLoading && !serverCanvas) {
+    return (
+      <div className="flex h-[calc(100vh-3.5rem-3rem)] -m-6 items-center justify-center bg-background">
+        <div className="text-caption text-muted-foreground">Loading canvas…</div>
+      </div>
+    )
+  }
+
+  const canvas = localCanvas ?? (isNew ? null : serverCanvas ?? null)
 
   return (
     <div className="flex h-[calc(100vh-3.5rem-3rem)] -m-6 animate-fade-in">
-      {/* Left: Seeds panel */}
-      <aside className="w-64 shrink-0 border-r border-border bg-card flex flex-col">
-        <div className="p-3 border-b border-border">
-          <Input placeholder="Search seeds…" className="h-9" />
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
-            {mockSeeds.map((s) => (
-              <div
-                key={s.id}
-                className="rounded-lg border border-border bg-input/50 px-3 py-2 text-sm cursor-grab hover:border-electric/50"
-              >
-                {s.title}
-              </div>
-            ))}
-          </div>
-          <div className="p-2">
-            <p className="text-caption text-muted-foreground mb-2">Propose related</p>
-            <Button variant="ghost" size="sm" className="w-full justify-start">+ Suggest from Garden</Button>
-          </div>
-        </ScrollArea>
-      </aside>
+      <SeedsPanel
+        canvasId={canvas?.id ?? canvasId ?? undefined}
+        onAddSeedToCanvas={handleAddSeedToCanvas}
+        onInsertSnippet={() => setSnippetModalOpen(true)}
+        onInsertAsset={() => setAssetModalOpen(true)}
+      />
+      <CanvasEditor
+        canvas={canvas}
+        isNew={isNew}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
+        autosaveStatus={autosaveStatus}
+        onOpenVersionHistory={() => setVersionHistoryOpen(true)}
+        onOpenComments={() => toast.info('Comments will be available in a future update.')}
+        onPresence={() => toast.info('Presence and collaboration coming soon.')}
+      />
+      <AIPanel
+        aiAvailable={false}
+        onAction={handleAIAction}
+        isActionLoading={false}
+      />
 
-      {/* Center: Canvas */}
-      <main className="flex-1 overflow-hidden bg-background relative">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(54,54,60,0.3)_1px,transparent_1px),linear-gradient(90deg,rgba(54,54,60,0.3)_1px,transparent_1px)] bg-[size:24px_24px]" />
-        <div className="absolute bottom-4 left-4 flex gap-2">
-          <Button variant="secondary" size="sm">Zoom in</Button>
-          <Button variant="secondary" size="sm">Zoom out</Button>
-          <Button variant="secondary" size="sm">Fit</Button>
-        </div>
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 text-caption text-muted-foreground">
-          Canvas: {canvasId ?? 'new'} · Autosaved
-        </div>
-        <div className="flex items-center justify-center h-full">
-          <div className="rounded-card-lg border border-border bg-card p-8 max-w-md text-center">
-            <p className="text-muted-foreground">Drop seeds here or add text blocks.</p>
-            <p className="text-caption text-muted-foreground mt-1">Select nodes and use AI panel for actions.</p>
-          </div>
-        </div>
-      </main>
+      <VersionHistoryDialog
+        open={versionHistoryOpen}
+        onOpenChange={setVersionHistoryOpen}
+        canvasId={canvas?.id ?? null}
+        onRestore={handleRestoreVersion}
+      />
 
-      {/* Right: AI panel */}
-      <aside className="w-72 shrink-0 border-l border-border bg-card flex flex-col">
-        <div className="p-3 border-b border-border flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="font-medium text-sm">AI</span>
-        </div>
-        <div className="p-3 space-y-2">
-          <p className="text-caption text-muted-foreground">Tone & length</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm">Professional</Button>
-            <Button variant="outline" size="sm">Casual</Button>
-          </div>
-          <p className="text-caption text-muted-foreground mt-3">Actions</p>
-          {aiActions.map((action) => (
-            <Button key={action} variant="secondary" className="w-full justify-start" size="sm">
-              {action}
+      <Dialog open={snippetModalOpen} onOpenChange={setSnippetModalOpen}>
+        <DialogContent showClose>
+          <DialogHeader>
+            <DialogTitle>Insert Snippet</DialogTitle>
+            <DialogDescription>
+              Browse and insert reusable snippets (hooks, CTAs) from your library.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSnippetModalOpen(false)}>
+              Cancel
             </Button>
-          ))}
-        </div>
-        <div className="mt-auto p-3 border-t border-border">
-          <Button asChild className="w-full">
-            <Link to="/drops">
-              <Download className="h-4 w-4 mr-2" />
-              Publish / Export to Drop
-            </Link>
-          </Button>
-        </div>
-      </aside>
+            <Button asChild>
+              <a href="/snippets">Open Snippets</a>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assetModalOpen} onOpenChange={setAssetModalOpen}>
+        <DialogContent showClose>
+          <DialogHeader>
+            <DialogTitle>Insert Asset</DialogTitle>
+            <DialogDescription>
+              Choose an image or file from your library to add to the canvas.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssetModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button asChild>
+              <a href="/library">Open Library</a>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

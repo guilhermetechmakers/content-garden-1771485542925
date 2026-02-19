@@ -42,7 +42,7 @@ export interface Cluster {
 
 export interface CanvasNode {
   id: string
-  type: 'seed' | 'text' | 'image' | 'outline'
+  type: 'seed' | 'text' | 'image' | 'outline' | 'asset'
   position: { x: number; y: number }
   data: Record<string, unknown>
 }
@@ -55,11 +55,22 @@ export interface CanvasEdge {
 
 export interface Canvas {
   id: string
+  user_id?: string
   title: string
   nodes: CanvasNode[]
   edges: CanvasEdge[]
   metadata: Record<string, unknown>
+  created_at?: string
   updated_at: string
+}
+
+export interface CanvasVersion {
+  id: string
+  canvas_id: string
+  version: number
+  nodes: CanvasNode[]
+  edges: CanvasEdge[]
+  created_at: string
 }
 
 export interface DropPost {
