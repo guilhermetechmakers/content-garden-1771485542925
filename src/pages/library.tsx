@@ -1,68 +1,122 @@
-import { Image, FileText, Download } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import {
+  PublishedItemsGrid,
+  SearchAndFilter,
+  RepurposeSuggestions,
+  AssetManager,
+  ExportAndSync,
+  type LibraryFilters,
+} from '@/components/library'
+import { fetchLibraryPublished, fetchLibraryAssets, type LibraryPublishedFilters } from '@/api/library'
+import type { LibraryPublishedItem, LibraryAsset } from '@/types'
 
-const mockPublished = [
-  { id: '1', title: 'LinkedIn post', platform: 'LinkedIn', date: '2025-02-15', thumb: 'image' },
-  { id: '2', title: 'X thread', platform: 'X', date: '2025-02-14', thumb: 'text' },
-]
+function libraryFiltersToApi(f: LibraryFilters): LibraryPublishedFilters {
+  return {
+    platform: f.platform,
+    tag: f.tag,
+    dateFrom: f.dateFrom,
+    dateTo: f.dateTo,
+  }
+}
 
 export function LibraryPage() {
+  const [filters, setFilters] = useState<LibraryFilters>({})
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [syncLoading, setSyncLoading] = useState(false)
+
+  const apiFilters = useMemo(() => libraryFiltersToApi(filters), [filters])
+
+  const { data: publishedData, isLoading: publishedLoading, isError: publishedError } = useQuery({
+    queryKey: ['library', 'published', apiFilters],
+    queryFn: () => fetchLibraryPublished(apiFilters),
+  })
+
+  const { data: assetsData, isLoading: assetsLoading } = useQuery({
+    queryKey: ['library', 'assets'],
+    queryFn: () => fetchLibraryAssets(),
+  })
+
+  const items = publishedData?.items ?? []
+  const assets = (assetsData?.assets ?? []) as LibraryAsset[]
+  const tagOptions = useMemo(() => {
+    const set = new Set<string>()
+    items.forEach((i) => i.tags?.forEach((t) => set.add(t)))
+    return Array.from(set)
+  }, [items])
+
+  const handleGetSuggestions = () => {
+    setSuggestionsLoading(true)
+    setTimeout(() => {
+      setSuggestionsLoading(false)
+      toast.success('Suggestions loaded')
+    }, 800)
+  }
+
+  const handleExport = () => {
+    toast.success('Export started')
+  }
+
+  const handleSync = () => {
+    setSyncLoading(true)
+    setTimeout(() => {
+      setSyncLoading(false)
+      toast.success('Sync complete')
+    }, 1500)
+  }
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
+    <div className="space-y-8 animate-fade-in">
+      <header>
         <h1 className="text-title font-bold text-foreground">Library</h1>
-        <p className="text-caption text-muted-foreground">Published content and assets for repurpose</p>
-      </div>
+        <p className="text-caption text-muted-foreground mt-1">
+          Published content and assets for repurpose
+        </p>
+      </header>
 
-      <div className="flex gap-2">
-        <Button variant="secondary" size="sm">Published</Button>
-        <Button variant="ghost" size="sm">Assets</Button>
-      </div>
+      <section aria-label="Search and filter">
+        <SearchAndFilter
+          filters={filters}
+          onFiltersChange={setFilters}
+          tagOptions={tagOptions}
+        />
+      </section>
 
-      <div>
+      <section aria-label="Published items">
         <h2 className="text-section font-semibold text-foreground mb-3">Published items</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {mockPublished.map((item) => (
-            <Card key={item.id} hover className="border-border bg-card">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-input">
-                    {item.thumb === 'image' ? (
-                      <Image className="h-6 w-6 text-muted-foreground" />
-                    ) : (
-                      <FileText className="h-6 w-6 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm truncate">{item.title}</p>
-                    <p className="text-caption text-muted-foreground">{item.platform} · {item.date}</p>
-                  </div>
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <Button variant="ghost" size="sm">Repurpose</Button>
-                  <Button variant="ghost" size="sm">View</Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
+        {publishedError && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+            Failed to load published items. Please try again.
+          </div>
+        )}
+        <PublishedItemsGrid
+          items={items}
+          isLoading={publishedLoading}
+          onRepurpose={() => toast.info('Open in Canvas to repurpose')}
+          onView={(item: LibraryPublishedItem) => toast.info(`View ${item.title}`)}
+        />
+      </section>
 
-      <Card className="border-border bg-card">
-        <CardContent className="py-6">
-          <h3 className="text-section font-semibold text-foreground mb-2">Repurpose suggestions (AI)</h3>
-          <p className="text-caption text-muted-foreground">Get ideas to turn published content into new formats.</p>
-          <Button variant="outline" size="sm" className="mt-3">Get suggestions</Button>
-        </CardContent>
-      </Card>
+      <RepurposeSuggestions
+        isLoading={suggestionsLoading}
+        onGetSuggestions={handleGetSuggestions}
+        onApply={() => toast.success('Idea applied')}
+      />
 
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm">
-          <Download className="h-4 w-4 mr-1" /> Export
-        </Button>
-        <Button variant="outline" size="sm">Sync</Button>
-      </div>
+      <AssetManager
+        assets={assets}
+        isLoading={assetsLoading}
+        onDownload={() => toast.success('Download started')}
+        onViewUsage={() => toast.info('Usage provenance')}
+      />
+
+      <ExportAndSync
+        onExport={handleExport}
+        onSync={handleSync}
+        isSyncing={syncLoading}
+        lastSyncAt={syncLoading ? null : undefined}
+      />
     </div>
   )
 }

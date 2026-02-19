@@ -18,3 +18,20 @@ export function trackCuration(detail: CurationEventDetail): void {
     new CustomEvent('garden:curation', { detail, bubbles: true })
   )
 }
+
+/** Runway slot analytics: slot assigned, marked posted, undo */
+export type RunwaySlotAction = 'slot_assigned' | 'marked_posted' | 'undo'
+
+export interface RunwaySlotEventDetail {
+  action: RunwaySlotAction
+  slotId?: string
+  postId?: string
+  previousSlotId?: string
+}
+
+export function trackRunwaySlot(detail: RunwaySlotEventDetail): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(
+    new CustomEvent('runway:slot', { detail, bubbles: true })
+  )
+}

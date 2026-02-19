@@ -91,13 +91,88 @@ export interface Drop {
   created_at: string
 }
 
+export type RunwaySlotStatus = 'empty' | 'filled' | 'posted'
+
+export interface RunwaySlotChecklistItem {
+  id: string
+  label: string
+  done: boolean
+}
+
 export interface RunwaySlot {
   id: string
+  user_id?: string
   date: string
   time: string
-  status: 'empty' | 'filled' | 'posted'
-  post_id?: string
-  checklist: { id: string; label: string; done: boolean }[]
+  status: RunwaySlotStatus
+  post_id?: string | null
+  drop_post_id?: string | null
+  checklist: RunwaySlotChecklistItem[]
+  post_notes?: string | null
+  posted_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Post card placed in a slot (from Drop or Library) */
+export interface RunwaySlotPost {
+  id: string
+  hook: string
+  value: string
+  example?: string
+  cta?: string
+  platform?: string
+  asset_urls?: string[]
+}
+
+/** Library record (container/folder) */
+export interface Library {
+  id: string
+  user_id: string
+  title: string
+  description?: string | null
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+/** Published item in Library: thumbnails, platform, date, performance metrics */
+export interface LibraryPublishedItem {
+  id: string
+  library_id?: string
+  user_id: string
+  title: string
+  platform: string
+  published_at: string
+  thumbnail_url?: string | null
+  asset_type: 'image' | 'video' | 'text' | 'carousel'
+  performance_metrics?: LibraryItemMetrics
+  tags?: string[]
+  source_drop_id?: string | null
+  runway_slot_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface LibraryItemMetrics {
+  impressions?: number
+  likes?: number
+  comments?: number
+  shares?: number
+  clicks?: number
+}
+
+/** Asset in Library: images, videos, files with usage provenance */
+export interface LibraryAsset {
+  id: string
+  user_id: string
+  library_id?: string
+  name: string
+  type: 'image' | 'video' | 'file'
+  url: string
+  usage_provenance?: string[]
+  created_at: string
+  updated_at: string
 }
 
 export interface Snippet {
