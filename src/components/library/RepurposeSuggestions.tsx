@@ -38,7 +38,9 @@ export function RepurposeSuggestions({
         {isLoading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-lg bg-input" />
+              <div key={i} className="relative h-16 overflow-hidden rounded-lg bg-input">
+                <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              </div>
             ))}
           </div>
         )}

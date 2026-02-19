@@ -28,7 +28,9 @@ export function AssetManager({
           <h3 className="text-section font-semibold text-foreground mb-4">Asset manager</h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-lg bg-input" />
+              <div key={i} className="relative h-24 overflow-hidden rounded-lg bg-input">
+                <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              </div>
             ))}
           </div>
         </CardContent>
@@ -60,13 +62,22 @@ export function AssetManager({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {assets.map((asset) => {
             const Icon = typeIcons[asset.type] ?? FileText
+            const isImage = asset.type === 'image' && asset.url
             return (
               <div
                 key={asset.id}
-                className="flex items-center gap-3 rounded-lg border border-border bg-input/30 p-3 transition-all duration-200 hover:border-primary/20 hover:shadow-sm"
+                className="flex items-center gap-3 rounded-lg border border-border bg-input/30 p-3 transition-all duration-200 hover:border-electric/30 hover:shadow-md"
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-card">
-                  <Icon className="h-6 w-6 text-muted-foreground" aria-hidden />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-card">
+                  {isImage ? (
+                    <img
+                      src={asset.url}
+                      alt={asset.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Icon className="h-6 w-6 text-muted-foreground" aria-hidden />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">{asset.name}</p>

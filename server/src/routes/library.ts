@@ -52,18 +52,33 @@ const mockPublished: Array<{
   },
 ]
 
+type QueryParams = { platform?: string; tag?: string; dateFrom?: string; dateTo?: string; query?: string; asset?: string }
+
 /** GET /library/published – list published items (with optional filters) */
 router.get('/published', (req: Request, res: Response) => {
   const userId = getUserId(req)
-  const platform = typeof (req.query as { platform?: string }).platform === 'string' ? (req.query as { platform?: string }).platform : undefined
-  const tag = typeof (req.query as { tag?: string }).tag === 'string' ? (req.query as { tag?: string }).tag : undefined
-  const dateFrom = typeof (req.query as { dateFrom?: string }).dateFrom === 'string' ? (req.query as { dateFrom?: string }).dateFrom : undefined
-  const dateTo = typeof (req.query as { dateTo?: string }).dateTo === 'string' ? (req.query as { dateTo?: string }).dateTo : undefined
+  const q = req.query as QueryParams
+  const platform = typeof q.platform === 'string' ? q.platform : undefined
+  const tag = typeof q.tag === 'string' ? q.tag : undefined
+  const dateFrom = typeof q.dateFrom === 'string' ? q.dateFrom : undefined
+  const dateTo = typeof q.dateTo === 'string' ? q.dateTo : undefined
+  const query = typeof q.query === 'string' ? q.query.trim().toLowerCase() : undefined
+  const asset = typeof q.asset === 'string' ? q.asset : undefined
+
   let items = mockPublished.filter((p) => p.user_id === userId)
   if (platform) items = items.filter((p) => p.platform === platform)
   if (tag) items = items.filter((p) => p.tags.includes(tag))
   if (dateFrom) items = items.filter((p) => p.published_at >= dateFrom)
   if (dateTo) items = items.filter((p) => p.published_at <= dateTo)
+  if (query) {
+    items = items.filter(
+      (p) =>
+        p.title.toLowerCase().includes(query) ||
+        p.platform.toLowerCase().includes(query) ||
+        p.tags.some((t) => t.toLowerCase().includes(query))
+    )
+  }
+  if (asset) items = items.filter((p) => p.asset_type === asset)
   res.json({ items })
 })
 

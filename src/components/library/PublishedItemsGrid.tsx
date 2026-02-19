@@ -58,7 +58,9 @@ export function PublishedItemsGrid({ items, isLoading, onRepurpose, onView }: Pu
           <Card key={i} className="border-border bg-card overflow-hidden">
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
-                <div className="h-16 w-16 shrink-0 animate-pulse rounded-lg bg-input" />
+                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-input">
+                  <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                </div>
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="h-4 w-24 animate-pulse rounded bg-input" />
                   <div className="h-3 w-32 animate-pulse rounded bg-input" />
@@ -97,8 +99,8 @@ export function PublishedItemsGrid({ items, isLoading, onRepurpose, onView }: Pu
             key={item.id}
             hover
             className={cn(
-              'border-border bg-card transition-all duration-200',
-              'hover:shadow-card-hover hover:border-primary/20'
+              'border-border bg-card transition-all duration-200 animate-fade-in',
+              'hover:shadow-card-hover hover:border-electric/30'
             )}
             style={{ animationDelay: `${i * 50}ms` }}
           >

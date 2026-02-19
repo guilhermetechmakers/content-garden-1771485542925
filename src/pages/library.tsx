@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -8,6 +8,7 @@ import {
   AssetManager,
   ExportAndSync,
   type LibraryFilters,
+  type RepurposeSuggestion,
 } from '@/components/library'
 import { fetchLibraryPublished, fetchLibraryAssets, type LibraryPublishedFilters } from '@/api/library'
 import type { LibraryPublishedItem, LibraryAsset } from '@/types'
@@ -18,13 +19,29 @@ function libraryFiltersToApi(f: LibraryFilters): LibraryPublishedFilters {
     tag: f.tag,
     dateFrom: f.dateFrom,
     dateTo: f.dateTo,
+    query: f.query,
+    asset: f.asset,
   }
 }
+
+const MOCK_SUGGESTIONS: RepurposeSuggestion[] = [
+  { id: '1', sourceTitle: 'LinkedIn post', idea: 'Turn into a carousel with 5 key takeaways', format: 'Carousel' },
+  { id: '2', sourceTitle: 'X thread', idea: 'Extract top quote for a short video script hook', format: 'Short Video' },
+  { id: '3', sourceTitle: 'LinkedIn post', idea: 'Repurpose as a LinkedIn article with deeper analysis', format: 'Article' },
+]
 
 export function LibraryPage() {
   const [filters, setFilters] = useState<LibraryFilters>({})
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState<RepurposeSuggestion[]>([])
   const [syncLoading, setSyncLoading] = useState(false)
+
+  useEffect(() => {
+    document.title = 'Library | Content Garden'
+    return () => {
+      document.title = 'Content Garden'
+    }
+  }, [])
 
   const apiFilters = useMemo(() => libraryFiltersToApi(filters), [filters])
 
@@ -50,12 +67,13 @@ export function LibraryPage() {
     setSuggestionsLoading(true)
     setTimeout(() => {
       setSuggestionsLoading(false)
-      toast.success('Suggestions loaded')
+      setSuggestions(MOCK_SUGGESTIONS)
+      toast.success('AI suggestions loaded')
     }, 800)
   }
 
-  const handleExport = () => {
-    toast.success('Export started')
+  const handleExport = (format?: 'assets' | 'csv' | 'json') => {
+    toast.success(`Export as ${format ?? 'assets'} started`)
   }
 
   const handleSync = () => {
@@ -99,6 +117,7 @@ export function LibraryPage() {
       </section>
 
       <RepurposeSuggestions
+        suggestions={suggestions}
         isLoading={suggestionsLoading}
         onGetSuggestions={handleGetSuggestions}
         onApply={() => toast.success('Idea applied')}

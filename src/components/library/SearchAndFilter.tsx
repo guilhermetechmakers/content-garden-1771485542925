@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -12,12 +13,29 @@ export interface LibraryFilters {
   query?: string
 }
 
+const ASSET_OPTIONS = [
+  { value: '', label: 'All types' },
+  { value: 'image', label: 'Image' },
+  { value: 'video', label: 'Video' },
+  { value: 'text', label: 'Text' },
+  { value: 'carousel', label: 'Carousel' },
+] as const
+
 interface SearchAndFilterProps {
   filters: LibraryFilters
   onFiltersChange: (f: LibraryFilters) => void
   platformOptions?: string[]
   tagOptions?: string[]
   className?: string
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debouncedValue
 }
 
 export function SearchAndFilter({
@@ -27,9 +45,21 @@ export function SearchAndFilter({
   tagOptions = [],
   className,
 }: SearchAndFilterProps) {
-  const set = (key: keyof LibraryFilters, value: string | undefined) => {
-    onFiltersChange({ ...filters, [key]: value || undefined })
-  }
+  const [localQuery, setLocalQuery] = useState(filters.query ?? '')
+  const debouncedQuery = useDebounce(localQuery, 300)
+
+  const set = useCallback(
+    (key: keyof LibraryFilters, value: string | undefined) => {
+      onFiltersChange({ ...filters, [key]: value || undefined })
+    },
+    [filters, onFiltersChange]
+  )
+
+  useEffect(() => {
+    if (debouncedQuery !== (filters.query ?? '')) {
+      onFiltersChange({ ...filters, query: debouncedQuery || undefined })
+    }
+  }, [debouncedQuery, filters, onFiltersChange])
 
   return (
     <div className={cn('space-y-4', className)} role="search" aria-label="Filter library by platform, date, tag, asset">
@@ -37,10 +67,10 @@ export function SearchAndFilter({
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
           type="search"
-          placeholder="Search by title or asset..."
-          value={filters.query ?? ''}
-          onChange={(e) => set('query', e.target.value)}
-          className="pl-9"
+          placeholder="Search by title, platform, or tag..."
+          value={localQuery}
+          onChange={(e) => setLocalQuery(e.target.value)}
+          className="pl-9 border-border bg-input focus:border-electric focus:ring-1 focus:ring-electric/50"
           aria-label="Search library"
         />
       </div>
@@ -79,6 +109,22 @@ export function SearchAndFilter({
             </option>
           ))}
         </select>
+        <label htmlFor="library-filter-asset" className="text-caption text-muted-foreground sr-only sm:not-sr-only">
+          Asset type
+        </label>
+        <select
+          id="library-filter-asset"
+          value={filters.asset ?? ''}
+          onChange={(e) => set('asset', e.target.value)}
+          className="h-9 rounded-lg border border-border bg-input px-3 py-1.5 text-sm text-foreground focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric/50"
+          aria-label="Filter by asset type"
+        >
+          {ASSET_OPTIONS.map((o) => (
+            <option key={o.value || 'all'} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         <label htmlFor="library-filter-dateFrom" className="text-caption text-muted-foreground sr-only sm:not-sr-only">
           Date from
         </label>
@@ -104,7 +150,10 @@ export function SearchAndFilter({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onFiltersChange({})}
+          onClick={() => {
+            setLocalQuery('')
+            onFiltersChange({})
+          }}
           aria-label="Clear filters"
         >
           Clear

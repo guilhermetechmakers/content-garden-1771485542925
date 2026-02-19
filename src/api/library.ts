@@ -10,6 +10,8 @@ export interface LibraryPublishedFilters {
   tag?: string
   dateFrom?: string
   dateTo?: string
+  query?: string
+  asset?: string
 }
 
 export function fetchLibraryPublished(filters?: LibraryPublishedFilters): Promise<LibraryPublishedResponse> {
@@ -18,6 +20,8 @@ export function fetchLibraryPublished(filters?: LibraryPublishedFilters): Promis
   if (filters?.tag) params.set('tag', filters.tag)
   if (filters?.dateFrom) params.set('dateFrom', filters.dateFrom)
   if (filters?.dateTo) params.set('dateTo', filters.dateTo)
+  if (filters?.query) params.set('query', filters.query)
+  if (filters?.asset) params.set('asset', filters.asset)
   const q = params.toString()
   return api.get<LibraryPublishedResponse>(`/library/published${q ? `?${q}` : ''}`)
 }
